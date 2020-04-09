@@ -172,14 +172,15 @@ def prompt_for_team(name: Optional[str] = None) -> Dict:
     Returns:
         A dictionary representing the team.
     """
-    team_dict = {'name': name or input('Team name? ')}
-    has_subteams = input('Will there be subteams? Y/N: ')
+    team_name = name or input('Team name? ')
+    team_dict = {'name': team_name}
+    has_subteams = input('Will {} have subteams? Y/N: '.format(team_name))
     if has_subteams.lower().startswith('y'):
         team_dict['subteams'] = [prompt_for_team(name) for name in get_answers(
-            prompt='Subteam name? ')]
+            prompt='{} subteam name? '.format(team_name))]
     else:
         team_dict['members'] = [name for name in get_answers(
-            prompt='Team member name: ')]
+            prompt='{} member name: '.format(team_name))]
     return team_dict
 
 
