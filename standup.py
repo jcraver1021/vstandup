@@ -4,8 +4,7 @@ import argparse
 import enum
 import json
 import random
-
-from typing import Optional, List, Dict
+from typing import Dict, Generator, List, Optional
 
 
 def _assert_members_xor_subteams(members, subteams):
@@ -94,6 +93,20 @@ class Team:
 
         return members
 
+    def to_dict(self) -> Dict:
+        """Write the team out as a dictionary.
+
+        Returns:
+            A dictionary with the contents of this team.
+        """
+        team_dict = {'name': self.name}
+        if self.members is None:
+            team_dict['subteams'] = [
+                subteam.to_dict() for subteam in self.subteams]
+        else:
+            team_dict['members'] = self.members
+        return team_dict
+
 
 def build_team_from_dict(team_dict: Dict) -> Team:
     """Build a team object based on the contents of a dictionary.
@@ -129,13 +142,57 @@ def build_team_from_file(filename: str) -> Team:
     return build_team_from_dict(team_dict)
 
 
+def get_answers(limit: int = -1,
+                prompt: str = '') -> Generator[str, None, None]:
+    """Get answers from input, stopping when an empty input is given.
+
+    Args:
+        limit: The maximum number of answers to accept. The default value of
+            -1 indicates an indefinite number of answers will be accepted.
+        prompt: The prompt when accepting an answer. The default value is the
+            empty string.
+    Returns:
+        A generator which yields the answers until exhausted.
+    """
+    count = 0
+    answer = 'init'
+    while (limit < 0 or count < limit) and answer:
+        answer = input(prompt)
+        count += 1
+        if answer:
+            yield answer
+
+
+def prompt_for_team(name: Optional[str] = None) -> Dict:
+    """Prompt user to construct a team.
+
+    Args:
+        name: The name of the team or subteam. Will prompt for a name if none
+            is provided.
+    Returns:
+        A dictionary representing the team.
+    """
+    team_dict = {'name': name or input('Team name? ')}
+    has_subteams = input('Will there be subteams? Y/N: ')
+    if has_subteams.lower().startswith('y'):
+        team_dict['subteams'] = [prompt_for_team(name) for name in get_answers(
+            prompt='Subteam name? ')]
+    else:
+        team_dict['members'] = [name for name in get_answers(
+            prompt='Team member name: ')]
+    return team_dict
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    parser.add_argument('filename',
+    parser.add_argument('--create', action='store_true',
+                        help='Create a team interactively via the command '
+                             'line')
+    parser.add_argument('--filename',
                         help='Path to JSON file containing team members.')
     parser.add_argument('--shuffle',
                         choices=[c.value for c in ShuffleMethod],
@@ -145,7 +202,18 @@ def main():
 
     args = parser.parse_args()
 
-    team = build_team_from_file(args.filename)
+    if not args.create and not args.filename:
+        raise RuntimeError('No team file provided and create not specified.')
+
+    if args.create:
+        team_dict = prompt_for_team()
+        if args.filename:
+            with open(args.filename, 'w') as json_file:
+                json.dump(team_dict, json_file)
+        team = build_team_from_dict(team_dict)
+    else:
+        team = build_team_from_file(args.filename)
+
     print('\n'.join(team.get_members(ShuffleMethod(args.shuffle))))
 
 
